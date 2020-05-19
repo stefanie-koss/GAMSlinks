@@ -24,6 +24,7 @@
 
 #include "reader_gmo.h"
 
+#include "dctmcc.h"
 #include "gmomcc.h"
 #include "gevmcc.h"
 #include "gdxcc.h"
@@ -55,6 +56,7 @@ struct SCIP_ReaderData
 {
    gmoHandle_t           gmo;                /**< GAMS model object */
    gevHandle_t           gev;                /**< GAMS environment */
+   dctHandle_t           dct;                /**< GAMS dictionary */
    int                   mipstart;           /**< how to handle initial variable levels */
    char*                 indicatorfile;      /**< name of GAMS options file that contains definitions on indicators */
 };
@@ -1244,6 +1246,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
 {
    char buffer[GMS_SSSIZE];
    gevHandle_t gev;
+   dctHandle_t dct;
    SCIP_Bool objnonlinear;
    SCIP_VAR** vars;
    SCIP_Real minprior;
@@ -1280,6 +1283,9 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
 
    gev = (gevHandle_t) gmoEnvironment(gmo);
    assert(gev != NULL);
+
+   dct = (dctHandle_t) gmoDict(gmo);
+   assert(dct != NULL);
 
    /* we want a real objective function, if it is linear, otherwise keep the GAMS single-variable-objective? */
    gmoObjReformSet(gmo, 1);
@@ -1459,7 +1465,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIP_CALL( SCIPaddVar(scip, vars[i]) );
       SCIPdebugMessage("added variable ");
       SCIPdebug( SCIPprintVar(scip, vars[i], NULL) );
-      
+
       if( origprior && minprior < maxprior && gmoGetVarTypeOne(gmo, i) != (int) gmovar_X )
       {
          /* in GAMS: higher priorities are given by smaller .prior values
@@ -2768,8 +2774,9 @@ SCIP_DECL_READERREAD(readerReadGmo)
    SCIP_READERDATA* readerdata;
    gmoHandle_t gmo;
    gevHandle_t gev;
+   dctHandle_t dct;
    char buffer[1024];
-   
+
    *result = SCIP_DIDNOTRUN;
 
    readerdata = SCIPreaderGetData(reader);
@@ -2777,8 +2784,9 @@ SCIP_DECL_READERREAD(readerReadGmo)
 
    if( readerdata->gmo == NULL )
    {
-      /* initialize GMO and GEV libraries */
-      if( !gmoCreate(&readerdata->gmo, buffer, sizeof(buffer)) || !gevCreate(&readerdata->gev, buffer, sizeof(buffer)) )
+      /* initialize GMO, GEV and DCT libraries */
+      if( !gmoCreate(&readerdata->gmo, buffer, sizeof(buffer)) || !gevCreate(&readerdata->gev, buffer, sizeof(buffer)) ||
+          !dctCreate(&readerdata->dct, buffer, sizeof(buffer)) )
       {
          SCIPerrorMessage(buffer);
          return SCIP_ERROR;
@@ -2786,6 +2794,7 @@ SCIP_DECL_READERREAD(readerReadGmo)
 
       gmo = readerdata->gmo;
       gev = readerdata->gev;
+      dct = readerdata->dct;
 
       /* load control file */
       if( gevInitEnvironmentLegacy(gev, filename) )
@@ -2793,6 +2802,7 @@ SCIP_DECL_READERREAD(readerReadGmo)
          SCIPerrorMessage("Could not load control file %s\n", filename);
          (void) gmoFree(&gmo);
          (void) gevFree(&gev);
+         (void) dctFree(&dct);
          return SCIP_READERROR;
       }
 
@@ -2801,6 +2811,7 @@ SCIP_DECL_READERREAD(readerReadGmo)
          SCIPerrorMessage("Error registering GAMS Environment: %s\n", buffer);
          (void) gmoFree(&gmo);
          (void) gevFree(&gev);
+         (void) dctFree(&dct);
          return SCIP_ERROR;
       }
 
@@ -2809,6 +2820,7 @@ SCIP_DECL_READERREAD(readerReadGmo)
          SCIPerrorMessage("Could not load model data.\n");
          (void) gmoFree(&gmo);
          (void) gevFree(&gev);
+         (void) dctFree(&dct);
          return SCIP_READERROR;
       }
    }
@@ -3191,6 +3203,7 @@ void SCIPsetGMOReaderGmo(
 
    readerdata->gmo = gmo;
    readerdata->gev = gmo != NULL ? (gevHandle_t)gmoEnvironment(readerdata->gmo) : NULL;
+   readerdata->dct = gmo != NULL ? (dctHandle_t)gmoDict(readerdata->gmo) : NULL;
 }
 
 /** passes GAMS options to SCIP and initiates reading of user options file, if given in GMO */

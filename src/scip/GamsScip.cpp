@@ -11,6 +11,7 @@
 #include <cstring>
 
 // GAMS
+#include "dctmcc.h"
 #include "gmomcc.h"
 #include "gevmcc.h"
 #include "palmcc.h"
@@ -137,6 +138,9 @@ int GamsScip::readyAPI(
 
    gev = (gevRec*)gmoEnvironment(gmo);
    assert(gev != NULL);
+
+   dct = (dctRec*)gmoDict(gmo);
+   assert(dct != NULL);
 
    ipoptlicensed = false;
    if( pal == NULL && !palCreate(&pal, buffer, sizeof(buffer)) )
@@ -483,6 +487,7 @@ DllExport void STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,Initialize)(void)
 {
    gmoInitMutexes();
    gevInitMutexes();
+   dctInitMutexes();
    palInitMutexes();
 }
 
@@ -490,6 +495,7 @@ DllExport void STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,Finalize)(void)
 {
    gmoFiniMutexes();
    gevFiniMutexes();
+   dctFiniMutexes();
    palFiniMutexes();
 }
 
@@ -504,6 +510,9 @@ DllExport int STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,create)(void** Cptr, char*
       return 0;
 
    if( !gevGetReady(msgBuf, msgBufLen) )
+      return 0;
+
+   if( !dctGetReady(msgBuf, msgBufLen) )
       return 0;
 
    if( !palGetReady(msgBuf, msgBufLen) )
@@ -530,6 +539,7 @@ DllExport int STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,free)(void** Cptr)
 
    gmoLibraryUnload();
    gevLibraryUnload();
+   dctLibraryUnload();
    palLibraryUnload();
 
    return 1;
@@ -559,6 +569,7 @@ DllExport void STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,Initialize)(void)
 {
    gmoInitMutexes();
    gevInitMutexes();
+   dctInitMutexes();
    palInitMutexes();
 }
 
@@ -566,6 +577,7 @@ DllExport void STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,Finalize)(void)
 {
    gmoFiniMutexes();
    gevFiniMutexes();
+   dctInitMutexes();
    palFiniMutexes();
 }
 
@@ -580,6 +592,9 @@ DllExport int STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,create)(void** Cptr, char*
       return 0;
 
    if( !gevGetReady(msgBuf, msgBufLen) )
+      return 0;
+
+   if( !dctGetReady(msgBuf, msgBufLen) )
       return 0;
 
    if( !palGetReady(msgBuf, msgBufLen) )
@@ -606,6 +621,7 @@ DllExport int STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,free)(void** Cptr)
 
    gmoLibraryUnload();
    gevLibraryUnload();
+   dctLibraryUnload();
    palLibraryUnload();
 
    return 1;

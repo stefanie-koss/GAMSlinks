@@ -12,6 +12,7 @@
 #include "GamsLinksConfig.h"
 #include "scip/type_retcode.h"
 
+typedef struct dctRec* dctHandle_t;
 typedef struct gmoRec* gmoHandle_t;
 typedef struct gevRec* gevHandle_t;
 typedef struct palRec* palHandle_t;
@@ -26,6 +27,7 @@ class DllExport GamsScip
 private:
    struct gmoRec*        gmo;                /**< GAMS modeling object */
    struct gevRec*        gev;                /**< GAMS environment */
+   struct dctRec*        dct;                /**< GAMS dictionary */
    struct palRec*        pal;                /**< GAMS audit and license object */
 
    SCIP*                 scip;               /**< SCIP structure */

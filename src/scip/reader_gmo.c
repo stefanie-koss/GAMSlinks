@@ -42,6 +42,16 @@
 #include "scip/dialog_default.h"
 #include "nlpi/struct_expr.h"
 
+//#ifdef GAMSLINKS_HAS_GCG
+   // TODO check which are still necessary
+   #include "scip/type_cons.h"
+   #include "struct_consclassifier.h"
+   #include "cons_decomp.h"
+   #include "struct_varclassifier.h"
+   #include "clscons_gamssymbol.h"
+   #include "clsvar_gamssymbol.h"
+//#endif
+
 #define READER_NAME             "gmoreader"
 #define READER_DESC             "Gams Control file reader (using GMO API)"
 #define READER_EXTENSION        "dat"
@@ -1236,6 +1246,143 @@ TERMINATE:
    return rc;
 }
 
+SCIP_RETCODE extractConsClassInfo(
+   SCIP*                 scip,
+   dctHandle_t           dct,
+   const int             consIdx,
+   const int             maxDom,
+   DEC_CONSCLASSIFIER*   classifier,
+   SCIP_CONS*            cons
+)
+{
+   int* symIndex;
+   int* symDim;
+   char* q;
+   int symDomIdx[maxDom];
+   int uelIndices[20]; // TODO find constant for size
+   char symName[GMS_SSSIZE];
+   int symName_i = GMS_SSSIZE;
+
+   SCIPallocBuffer( scip, &symIndex );
+   SCIPallocBuffer( scip, &symDim );
+   SCIPallocBuffer( scip, &q );
+
+   // get symbol index (and symbol dimension) for constraint index
+   int symIndexSuccess = dctRowUels( dct, consIdx, symIndex, uelIndices, symDim );
+   // get domain indices
+   int symDomIdxSuccess = dctSymDomIdx( dct, *symIndex, symDomIdx, symDim);
+   // (get symbol name for debug information)
+   int symNameSuccess = dctSymName( dct, *symIndex, symName, symName_i);
+
+/* // print debug information
+   if ( !symNameSuccess || !symTxtSuccess || !symDomIdxSuccess)
+   {
+      printf("\nsymIndex=%d: type=%i, %s(%s), dimension %d", *symIndex, symType, symName, symTxt, dctSymDim(dct, *symIndex));
+      if (symDim[0] != 0)
+      {
+         printf(", domains: ");
+         dctDomName(dct, symDomIdx[0], domName, domName_i);
+         printf("%s", domName);
+         for ( int idx = 1; idx < symDim[0]; ++idx)
+         {
+            dctDomName(dct, symDomIdx[idx], domName, domName_i);
+            printf(",%s", domName);
+         }
+      }
+      printf("\n");
+   }
+   else
+   {
+      printf("\nfailed finding symName, symTxt or symDomIdx for symIndex=%d\n", *symIndex);
+   }*/
+
+   // give constraint with symbol index to gamssymbol classifier
+   SCIP_CALL( DECconsClassifierGamssymbolAddEntry(classifier, cons, *symIndex) );
+
+TERMINATE:
+   SCIPfreeBuffer( scip, &symIndex );
+   SCIPfreeBuffer( scip, &symDim );
+   SCIPfreeBuffer( scip, &q );
+
+   return SCIP_OKAY;
+}
+
+SCIP_RETCODE extractVarClassInfo(
+   SCIP*                 scip,
+   dctHandle_t           dct,
+   const int             varIdx,
+   const int             maxDom,
+   DEC_VARCLASSIFIER*    classifier,
+   SCIP_VAR*             var
+)
+{
+   int* symIndex;
+   int uelIndices[20];
+   int* symDim;
+   int symDomIdx[maxDom];
+   char symName[GMS_SSSIZE];
+   int symName_i = GMS_SSSIZE;
+   char* q; // segfault?
+   char symTxt[GMS_SSSIZE];
+   char uelLabel[GMS_SSSIZE];
+   char domName[GMS_SSSIZE];
+   int domName_i = GMS_SSSIZE;
+
+   // objective variable
+   if( varIdx == -1)
+   {
+      // TODO do something
+      return SCIP_OKAY;
+   }
+
+   // variable for objective constant
+   if( varIdx == -2 )
+   {
+      // TODO do something
+      return SCIP_OKAY;
+   }
+
+   SCIPallocBuffer( scip, &symIndex );
+   SCIPallocBuffer( scip, &symDim );
+   SCIPallocBuffer( scip, &q );
+   int symIndexSuccess = dctColUels( dct, varIdx, symIndex, uelIndices, symDim );
+   int symNameSuccess = dctSymName(dct, *symIndex, symName, symName_i);
+   int symTxtSuccess = dctSymText(dct, *symIndex, q, symTxt, 20);
+   //printf("quote character: %s", q);
+   int symDomIdxSuccess = dctSymDomIdx(dct, *symIndex, symDomIdx, symDim);
+   int symType = dctSymType(dct, *symIndex); // type 6 is eqn, type 5 is var
+   if ( !symNameSuccess || !symTxtSuccess || !symDomIdxSuccess)
+   {
+      printf("\nsymIndex=%d: type=%i, %s(%s), dimension %d", *symIndex, symType, symName, symTxt, dctSymDim(dct, *symIndex));
+      if (symDim[0] != 0)
+      {
+         printf(", domains: ");
+         dctDomName(dct, symDomIdx[0], domName, domName_i);
+         printf("%s", domName);
+         for ( int idx = 1; idx < symDim[0]; ++idx)
+         {
+            dctDomName(dct, symDomIdx[idx], domName, domName_i);
+            printf(",%s", domName);
+         }
+      }
+      printf("\n");
+   }
+   else
+   {
+      printf("\nfailed finding symName, symTxt or symDomIdx for symIndex=%d\n", *symIndex);
+   }
+
+   // give constraint with symbol index to gamssymbol classifier
+   SCIP_CALL( DECvarClassifierGamssymbolAddEntry(classifier, var, *symIndex) );
+
+TERMINATE:
+   SCIPfreeBuffer( scip, &symIndex );
+   SCIPfreeBuffer( scip, &symDim );
+   SCIPfreeBuffer( scip, &q );
+
+   return SCIP_OKAY;
+}
+
 /** creates a SCIP problem from a GMO */
 SCIP_RETCODE SCIPcreateProblemReaderGmo(
    SCIP*                 scip,               /**< SCIP data structure */
@@ -1286,6 +1433,14 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
 
    dct = (dctHandle_t) gmoDict(gmo);
    assert(dct != NULL);
+
+   /* get gams classifiers */
+   assert(scip != NULL);
+   DEC_CONSCLASSIFIER* consclassifiersymbols = DECfindConsClassifier( scip, "gamssymbol" );
+   DEC_VARCLASSIFIER* varclassifiersymbols = DECfindVarClassifier( scip, "gamssymbol" );
+
+   /* extract general dct information */
+   const int maxDom = dctDomNameCount( dct );
 
    /* we want a real objective function, if it is linear, otherwise keep the GAMS single-variable-objective? */
    gmoObjReformSet(gmo, 1);
@@ -1466,6 +1621,9 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebugMessage("added variable ");
       SCIPdebug( SCIPprintVar(scip, vars[i], NULL) );
 
+      // TODO: add var classifier info here REACHED
+      SCIP_CALL( extractVarClassInfo( scip, dct, i, maxDom, varclassifiersymbols, vars[i] ) );
+
       if( origprior && minprior < maxprior && gmoGetVarTypeOne(gmo, i) != (int) gmovar_X )
       {
          /* in GAMS: higher priorities are given by smaller .prior values
@@ -1525,6 +1683,11 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
          SCIP_CALL( SCIPaddCons(scip, cons) );
          SCIPdebugMessage("added constraint ");
          SCIPdebug( SCIPprintCons(scip, cons, NULL) );
+
+         // TODO: add cons classifier info here NOT REACHED
+         // TODO: case idx = -1 for auto generated cons
+         SCIP_CALL( extractConsClassInfo( scip, dct, -1, maxDom, consclassifiersymbols, cons ) );
+
          SCIP_CALL( SCIPreleaseCons(scip, &cons) );
       }
    }
@@ -1572,6 +1735,9 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
          SCIP_CALL( SCIPaddCons(scip, con) );
          SCIPdebugMessage("added constraint ");
          SCIPdebug( SCIPprintCons(scip, con, NULL) );
+
+         // TODO: add cons classifier info here NOT REACHED
+         // TODO: special case for sos constaints? what row idx?
          SCIP_CALL( SCIPreleaseCons(scip, &con) );
       }
       
@@ -1720,6 +1886,10 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
                      SCIP_CALL( SCIPaddCons(scip, con) );
                      SCIPdebugMessage("added constraint ");
                      SCIPdebug( SCIPprintCons(scip, con, NULL) );
+
+                     // TODO: add cons classifier info here NOT REACHED
+                     // what constraint is set up here?
+
                      SCIP_CALL( SCIPreleaseCons(scip, &con) );
                      con = NULL;
                   }
@@ -1823,6 +1993,10 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIP_CALL( SCIPaddCons(scip, con) );      
       SCIPdebugMessage("added constraint ");
       SCIPdebug( SCIPprintCons(scip, con, NULL) );
+
+      // TODO: add cons classifier info here REACHED
+      SCIP_CALL( extractConsClassInfo( scip, dct, i, maxDom, consclassifiersymbols, con) );
+
       SCIP_CALL( SCIPreleaseCons(scip, &con) );
 
       /* @todo do something about this */
@@ -1845,6 +2019,9 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIP_CALL( SCIPaddVar(scip, probdata->objvar) );
       SCIPdebugMessage("added objective variable ");
       SCIPdebug( SCIPprintVar(scip, probdata->objvar, NULL) );
+
+      // TODO: add var classifier info here NOT REACHED
+      SCIP_CALL( extractVarClassInfo( scip, dct, -1, maxDom, varclassifiersymbols, probdata->objvar ) );
 
       if( gmoGetObjOrder(gmo) != (int) gmoorder_NL )
       {
@@ -1946,6 +2123,10 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIP_CALL( SCIPaddCons(scip, con) );
       SCIPdebugMessage("added objective constraint ");
       SCIPdebug( SCIPprintCons(scip, con, NULL) );
+
+      // TODO: add cons classifier info here
+      // TODO: special case for objective constraint
+
       SCIP_CALL( SCIPreleaseCons(scip, &con) );
    }
    else if( !SCIPisZero(scip, gmoObjConst(gmo)) )
@@ -1955,6 +2136,9 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIP_CALL( SCIPaddVar(scip, probdata->objconst) );
       SCIPdebugMessage("added variable for objective constant: ");
       SCIPdebug( SCIPprintVar(scip, probdata->objconst, NULL) );
+
+      // TODO: add var classifier info here NOT REACHED
+      SCIP_CALL( extractVarClassInfo( scip, dct, -2, maxDom, varclassifiersymbols, probdata->objconst ) );
    }
 
    if( gmoSense(gmo) == (int) gmoObj_Max )

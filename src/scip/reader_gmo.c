@@ -45,10 +45,12 @@
 //#ifdef GAMSLINKS_HAS_GCG
    // TODO check which are still necessary
    #include "scip/type_cons.h"
-   #include "struct_consclassifier.h"
    #include "cons_decomp.h"
+   #include "struct_consclassifier.h"
    #include "struct_varclassifier.h"
+   #include "clscons_gamsdomain.h"
    #include "clscons_gamssymbol.h"
+   #include "clsvar_gamsdomain.h"
    #include "clsvar_gamssymbol.h"
 //#endif
 
@@ -1251,7 +1253,6 @@ SCIP_RETCODE extractConsClassInfo(
    dctHandle_t           dct,
    const int             consIdx,
    const int             maxDom,
-   DEC_CONSCLASSIFIER*   classifier,
    SCIP_CONS*            cons
 )
 {
@@ -1262,6 +1263,10 @@ SCIP_RETCODE extractConsClassInfo(
    int uelIndices[20]; // TODO find constant for size
    char symName[GMS_SSSIZE];
    int symName_i = GMS_SSSIZE;
+
+   assert(scip != NULL);
+   DEC_CONSCLASSIFIER* consclssymbol = DECfindConsClassifier( scip, "gamssymbol" );
+   DEC_CONSCLASSIFIER* consclsdomain = DECfindConsClassifier( scip, "gamsdomain" );
 
    SCIPallocBuffer( scip, &symIndex );
    SCIPallocBuffer( scip, &symDim );
@@ -1297,7 +1302,9 @@ SCIP_RETCODE extractConsClassInfo(
    }*/
 
    // give constraint with symbol index to gamssymbol classifier
-   SCIP_CALL( DECconsClassifierGamssymbolAddEntry(classifier, cons, *symIndex) );
+   SCIP_CALL( DECconsClassifierGamssymbolAddEntry(consclssymbol, cons, *symIndex) );
+   // give constraint with symbol domain indices and symbol dimension to gamsdomain classifier
+   SCIP_CALL( DECconsClassifierGamsdomainAddEntry(consclsdomain, cons, symDomIdx, symDim) );
 
 TERMINATE:
    SCIPfreeBuffer( scip, &symIndex );
@@ -1312,7 +1319,6 @@ SCIP_RETCODE extractVarClassInfo(
    dctHandle_t           dct,
    const int             varIdx,
    const int             maxDom,
-   DEC_VARCLASSIFIER*    classifier,
    SCIP_VAR*             var
 )
 {
@@ -1327,6 +1333,10 @@ SCIP_RETCODE extractVarClassInfo(
    char uelLabel[GMS_SSSIZE];
    char domName[GMS_SSSIZE];
    int domName_i = GMS_SSSIZE;
+
+   assert(scip != NULL);
+   DEC_VARCLASSIFIER* varclssymbol = DECfindVarClassifier( scip, "gamssymbol" );
+   DEC_VARCLASSIFIER* varclsdomain = DECfindVarClassifier( scip, "gamsdomain" );
 
    // objective variable
    if( varIdx == -1)
@@ -1372,8 +1382,10 @@ SCIP_RETCODE extractVarClassInfo(
       printf("\nfailed finding symName, symTxt or symDomIdx for symIndex=%d\n", *symIndex);
    }
 
-   // give constraint with symbol index to gamssymbol classifier
-   SCIP_CALL( DECvarClassifierGamssymbolAddEntry(classifier, var, *symIndex) );
+   // give variable with symbol index to gamssymbol classifier
+   SCIP_CALL( DECvarClassifierGamssymbolAddEntry(varclssymbol, var, *symIndex) );
+   // give variable with symbol domain indices and symbol dimension to gamsdomain classifier
+   SCIP_CALL( DECvarClassifierGamsdomainAddEntry(varclsdomain, var, symDomIdx, symDim) );
 
 TERMINATE:
    SCIPfreeBuffer( scip, &symIndex );
@@ -1433,11 +1445,6 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
 
    dct = (dctHandle_t) gmoDict(gmo);
    assert(dct != NULL);
-
-   /* get gams classifiers */
-   assert(scip != NULL);
-   DEC_CONSCLASSIFIER* consclassifiersymbols = DECfindConsClassifier( scip, "gamssymbol" );
-   DEC_VARCLASSIFIER* varclassifiersymbols = DECfindVarClassifier( scip, "gamssymbol" );
 
    /* extract general dct information */
    const int maxDom = dctDomNameCount( dct );
@@ -1622,7 +1629,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebug( SCIPprintVar(scip, vars[i], NULL) );
 
       // TODO: add var classifier info here REACHED
-      SCIP_CALL( extractVarClassInfo( scip, dct, i, maxDom, varclassifiersymbols, vars[i] ) );
+      SCIP_CALL( extractVarClassInfo( scip, dct, i, maxDom, vars[i] ) );
 
       if( origprior && minprior < maxprior && gmoGetVarTypeOne(gmo, i) != (int) gmovar_X )
       {
@@ -1686,7 +1693,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
 
          // TODO: add cons classifier info here NOT REACHED
          // TODO: case idx = -1 for auto generated cons
-         SCIP_CALL( extractConsClassInfo( scip, dct, -1, maxDom, consclassifiersymbols, cons ) );
+         SCIP_CALL( extractConsClassInfo( scip, dct, -1, maxDom, cons ) );
 
          SCIP_CALL( SCIPreleaseCons(scip, &cons) );
       }
@@ -1995,7 +2002,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebug( SCIPprintCons(scip, con, NULL) );
 
       // TODO: add cons classifier info here REACHED
-      SCIP_CALL( extractConsClassInfo( scip, dct, i, maxDom, consclassifiersymbols, con) );
+      SCIP_CALL( extractConsClassInfo( scip, dct, i, maxDom, con) );
 
       SCIP_CALL( SCIPreleaseCons(scip, &con) );
 
@@ -2021,7 +2028,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebug( SCIPprintVar(scip, probdata->objvar, NULL) );
 
       // TODO: add var classifier info here NOT REACHED
-      SCIP_CALL( extractVarClassInfo( scip, dct, -1, maxDom, varclassifiersymbols, probdata->objvar ) );
+      SCIP_CALL( extractVarClassInfo( scip, dct, -1, maxDom, probdata->objvar ) );
 
       if( gmoGetObjOrder(gmo) != (int) gmoorder_NL )
       {
@@ -2138,7 +2145,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebug( SCIPprintVar(scip, probdata->objconst, NULL) );
 
       // TODO: add var classifier info here NOT REACHED
-      SCIP_CALL( extractVarClassInfo( scip, dct, -2, maxDom, varclassifiersymbols, probdata->objconst ) );
+      SCIP_CALL( extractVarClassInfo( scip, dct, -2, maxDom, probdata->objconst ) );
    }
 
    if( gmoSense(gmo) == (int) gmoObj_Max )

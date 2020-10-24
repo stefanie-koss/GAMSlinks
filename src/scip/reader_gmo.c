@@ -22,6 +22,7 @@
 #define M_PI           3.141592653589793238462643
 #endif
 
+#include "GamsLinksConfig.h"
 #include "reader_gmo.h"
 
 #include "dctmcc.h"
@@ -42,17 +43,19 @@
 #include "scip/dialog_default.h"
 #include "nlpi/struct_expr.h"
 
-//#ifdef GAMSLINKS_HAS_GCG
-   // TODO check which are still necessary
-   #include "scip/type_cons.h"
-   #include "cons_decomp.h"
-   #include "struct_consclassifier.h"
-   #include "struct_varclassifier.h"
-   #include "clscons_gamsdomain.h"
-   #include "clscons_gamssymbol.h"
-   #include "clsvar_gamsdomain.h"
-   #include "clsvar_gamssymbol.h"
-//#endif
+#ifdef GAMSLINKS_HAS_GCG
+#include "gcg.h"
+   #if GCG_VERSION >= 300
+      #include "scip/type_cons.h"
+      #include "cons_decomp.h"
+      #include "struct_consclassifier.h"
+      #include "struct_varclassifier.h"
+      #include "clscons_gamsdomain.h"
+      #include "clscons_gamssymbol.h"
+      #include "clsvar_gamsdomain.h"
+      #include "clsvar_gamssymbol.h"
+   #endif
+#endif
 
 #define READER_NAME             "gmoreader"
 #define READER_DESC             "Gams Control file reader (using GMO API)"
@@ -1248,6 +1251,8 @@ TERMINATE:
    return rc;
 }
 
+#ifdef GAMSLINKS_HAS_GCG
+   #if GCG_VERSION >= 300
 SCIP_RETCODE extractConsClassInfo(
    SCIP*                 scip,
    dctHandle_t           dct,
@@ -1394,6 +1399,8 @@ TERMINATE:
 
    return SCIP_OKAY;
 }
+   #endif // GCG_VERSION
+#endif // GAMSLINKS_HAS_GCG
 
 /** creates a SCIP problem from a GMO */
 SCIP_RETCODE SCIPcreateProblemReaderGmo(
@@ -1628,8 +1635,12 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebugMessage("added variable ");
       SCIPdebug( SCIPprintVar(scip, vars[i], NULL) );
 
+#ifdef GAMSLINKS_HAS_GCG
+   #if GCG_VERSION >= 300
       // TODO: add var classifier info here REACHED
       SCIP_CALL( extractVarClassInfo( scip, dct, i, maxDom, vars[i] ) );
+   #endif
+#endif
 
       if( origprior && minprior < maxprior && gmoGetVarTypeOne(gmo, i) != (int) gmovar_X )
       {
@@ -1691,9 +1702,13 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
          SCIPdebugMessage("added constraint ");
          SCIPdebug( SCIPprintCons(scip, cons, NULL) );
 
+#ifdef GAMSLINKS_HAS_GCG
+   #if GCG_VERSION >= 300
          // TODO: add cons classifier info here NOT REACHED
          // TODO: case idx = -1 for auto generated cons
          SCIP_CALL( extractConsClassInfo( scip, dct, -1, maxDom, cons ) );
+   #endif
+#endif
 
          SCIP_CALL( SCIPreleaseCons(scip, &cons) );
       }
@@ -2001,8 +2016,12 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebugMessage("added constraint ");
       SCIPdebug( SCIPprintCons(scip, con, NULL) );
 
+#ifdef GAMSLINKS_HAS_GCG
+   #if GCG_VERSION >= 300
       // TODO: add cons classifier info here REACHED
       SCIP_CALL( extractConsClassInfo( scip, dct, i, maxDom, con) );
+   #endif
+#endif
 
       SCIP_CALL( SCIPreleaseCons(scip, &con) );
 
@@ -2027,8 +2046,12 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebugMessage("added objective variable ");
       SCIPdebug( SCIPprintVar(scip, probdata->objvar, NULL) );
 
+#ifdef GAMSLINKS_HAS_GCG
+   #if GCG_VERSION >= 300
       // TODO: add var classifier info here NOT REACHED
       SCIP_CALL( extractVarClassInfo( scip, dct, -1, maxDom, probdata->objvar ) );
+   #endif
+#endif
 
       if( gmoGetObjOrder(gmo) != (int) gmoorder_NL )
       {
@@ -2144,8 +2167,12 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebugMessage("added variable for objective constant: ");
       SCIPdebug( SCIPprintVar(scip, probdata->objconst, NULL) );
 
+#ifdef GAMSLINKS_HAS_GCG
+   #if GCG_VERSION >= 300
       // TODO: add var classifier info here NOT REACHED
       SCIP_CALL( extractVarClassInfo( scip, dct, -2, maxDom, probdata->objconst ) );
+   #endif
+#endif
    }
 
    if( gmoSense(gmo) == (int) gmoObj_Max )

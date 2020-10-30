@@ -4,8 +4,6 @@
 #
 # Author: Stefan Vigerske
 
-AUTOMAKE_OPTIONS = foreign subdir-objects
-
 AM_CPPFLAGS = \
   -I$(srcdir)/../cbc \
   -I$(srcdir)/../osi \
@@ -13,7 +11,7 @@ AM_CPPFLAGS = \
   -I$(srcdir)/../utils \
   $(GAMSBONMIN_CFLAGS)
 
-LDFLAGS += $(LT_LDFLAGS)
+AM_LDFLAGS = $(LT_LDFLAGS)
 
 lib_LTLIBRARIES = libGamsBonmin.la
 libGamsBonmin_la_SOURCES = GamsBonmin.cpp GamsMINLP.cpp \
@@ -29,10 +27,8 @@ include ../utils/Makefile_gamsapi.inc
 noinst_PROGRAMS = optbonmin
 optbonmin_SOURCES = optbonmin.cpp ../utils/GamsOptionsSpecWriter.cpp
 optbonmin_LDADD = libGamsBonmin.la
-CLEANFILES += optbonmin.gms optbonmin.txt optbonmin_t.md
 
-install-exec-local : install-libLTLIBRARIES
-	$(top_srcdir)/gamsinst.py "@GAMS_PATH@" libGamsBonmin.la MYBONMIN bon "MIP MIQCP MINLP" 0
-
-uninstall-local :
-	$(top_srcdir)/gamsuninst.py "@GAMS_PATH@" MYBONMIN
+pkgdata_DATA = optbonmin.def
+doc_DATA = optbonmin.md
+optbonmin.def optbonmin.md : optbonmin$(EXEEXT)
+	./optbonmin$(EXEEXT)

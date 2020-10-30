@@ -1,7 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import sys
 import os
+import subprocess
 import shutil
 
 def print_usage() :
@@ -60,6 +61,11 @@ if solverlib.endswith('.la') :
         print("Error: no libdir or dlname found in", solverlib, file=sys.stderr)
         print_usage()
         sys.exit(1)
+    if iswindows :
+       # convert msys-path to windows path
+       libdir = subprocess.check_output("cygpath -w " + libdir).decode("utf-8").strip()
+       # on Windows, DLLs are in bindir and not in libdir, assume bindir is libdir/../bin
+       libdir = os.path.join(libdir, '..', 'bin')
     solverlib = os.path.join(libdir, dlname)
     if not os.path.isfile(solverlib) :
         print("Error: %s does not exist or is not a file" % solverlib, file=sys.stderr)
@@ -121,15 +127,14 @@ try :
         if line.startswith('DEFAULTS') :
             print('Adding section for solver', solvername, 'using lib', solverlib)
             # add config for solver before DEFAULTS section
-            # TODO 05 needs to be added to 0001020304 with GAMS 30?
-            print("%s 111 %s 0001020304 1 0 2 %s" % (solvername, dicttype, modeltypes), file = outfile)
+            print("%s 111 %s 000102030405 1 0 2 %s" % (solvername, dicttype, modeltypes), file = outfile)
             print('gmsgennt.cmd' if iswindows else 'gmsgenus.run', file = outfile, end = '')
             if optdef :
-                print('', os.path.basename(optdef), file = outfile)
+                print('', optdef, file = outfile)
             else :
                 print(file = outfile)
             print('gmsgennx.exe' if iswindows else 'gmsgenux.out', file = outfile)
-            print('%s %s 1 1' % (solverlib, solverid), file = outfile)  # the last '1' indicates thread-safety, which we just assume here...
+            print('%s %s 1 0' % (solverlib, solverid), file = outfile)  # the last '0' indicates no thread-safety, which already isn't the case because of the GAMS API files
             print(file=outfile)
     
         print(line, end = '', file = outfile)
@@ -140,7 +145,3 @@ except Exception as err:
     outfile.close()
     shutil.copy(gmscmp + '.bak', gmscmp)
     sys.exit(1)
-
-if optdef :
-    print('Installing', optdef)
-    shutil.copy(optdef, gamssysdir)

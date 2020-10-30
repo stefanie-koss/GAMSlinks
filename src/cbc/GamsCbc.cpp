@@ -9,6 +9,7 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <climits>
 #include <list>
 #include <string>
 
@@ -22,6 +23,7 @@
 #include "optcc.h"
 #include "gdxcc.h"
 #include "palmcc.h"
+#include "cfgmcc.h"
 
 #include "GamsMessageHandler.hpp"
 #include "GamsOsiHelper.hpp"
@@ -682,13 +684,21 @@ bool GamsCbc::setupParameters()
       }
       createdopt = true;
 
+      // get definition file name from cfg object
       char deffile[2*GMS_SSSIZE+20];
-      gevGetStrOpt(gev, gevNameSysDir, buffer);
-#ifdef GAMS_BUILD
-      sprintf(deffile, "%soptcbc.def", buffer);
-#else
-      sprintf(deffile, "%soptmycbc.def", buffer);
-#endif
+      cfgHandle_t cfg;
+      cfg = (cfgHandle_t)gevGetALGX(gev);
+      assert(cfg != NULL);
+      gevGetCurrentSolver(gev, gmo, buffer);
+      deffile[0] = '\0';
+      cfgDefFileName(cfg, buffer, deffile);
+      if( deffile[0] != '/' && deffile[1] != ':' )
+      {
+         // if deffile is not absolute path, then prefix with sysdir
+         gevGetStrOpt(gev, gevNameSysDir, buffer);
+         strcat(buffer, deffile);
+         strcpy(deffile, buffer);
+      }
       if( optReadDefinition(opt, deffile) )
       {
          int itype;
@@ -736,7 +746,7 @@ bool GamsCbc::setupParameters()
    // overwrite Cbc defaults with values from GAMS options, if not set in options file
    if( !optGetDefinedStr(opt, "reslim") )
       optSetDblStr(opt, "reslim", gevGetDblOpt(gev, gevResLim));
-   if( !optGetDefinedStr(opt, "iterlim") && gevGetIntOpt(gev, gevIterLim) != ITERLIM_INFINITY )
+   if( !optGetDefinedStr(opt, "iterlim") && gevGetIntOpt(gev, gevIterLim) < INT_MAX )
       optSetIntStr(opt, "iterlim", gevGetIntOpt(gev, gevIterLim));
    if( !optGetDefinedStr(opt, "nodlim") && gevGetIntOpt(gev, gevNodeLim) > 0 )
       optSetIntStr(opt, "nodlim", gevGetIntOpt(gev, gevNodeLim));
@@ -754,7 +764,7 @@ bool GamsCbc::setupParameters()
       optSetDblStr(opt, "cutoff", -optGetDblStr(opt, "cutoff"));
    if( !optGetDefinedStr(opt, "increment") && gevGetIntOpt(gev, gevUseCheat) )
       optSetDblStr(opt, "increment", gevGetDblOpt(gev, gevCheat));
-   if( !optGetDefinedStr(opt, "threads") )
+   if( CbcModel::haveMultiThreadSupport() && !optGetDefinedStr(opt, "threads") )
       optSetIntStr(opt, "threads", gevThreads(gev));
 
    // MIP parameters
@@ -886,7 +896,7 @@ bool GamsCbc::setupParameters()
    if( optGetStrStr(opt, "clocktype", clocktype) == NULL || strcmp(clocktype, "wall") == 0 )
       model->setUseElapsedTime(true);
 
-   nthreads = optGetIntStr(opt, "threads");
+   nthreads = CbcModel::haveMultiThreadSupport() ? optGetIntStr(opt, "threads") : 1;
    if( nthreads > 1 && CbcModel::haveMultiThreadSupport() )
    {
       // Cbc runs deterministic when 100 is added to nthreads
@@ -1451,6 +1461,9 @@ DllExport int STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,create)(void** Cptr, char*
    if( !optGetReady(msgBuf, msgBufLen) )
       return 0;
 
+   if( !cfgGetReady(msgBuf, msgBufLen) )
+      return 0;
+
    *Cptr = (void*) new GamsCbc();
    if( *Cptr == NULL )
    {
@@ -1476,6 +1489,7 @@ DllExport int STDCALL GAMSSOLVER_CONCAT(GAMSSOLVER_ID,free)(void** Cptr)
    optLibraryUnload();
    if( gdxLibraryLoaded() )
       gdxLibraryUnload();
+   cfgLibraryUnload();
 
    return 1;
 }

@@ -4,8 +4,6 @@
 #
 # Author: Stefan Vigerske
 
-AUTOMAKE_OPTIONS = foreign subdir-objects
-
 AM_CPPFLAGS = \
   -I$(srcdir)/../bonmin \
   -I$(srcdir)/../cbc \
@@ -14,7 +12,7 @@ AM_CPPFLAGS = \
   -I$(srcdir)/../utils \
   $(GAMSCOUENNE_CFLAGS)
 
-LDFLAGS += $(LT_LDFLAGS)
+AM_LDFLAGS = $(LT_LDFLAGS)
 
 lib_LTLIBRARIES = libGamsCouenne.la
 libGamsCouenne_la_SOURCES = GamsCouenne.cpp \
@@ -31,10 +29,8 @@ include ../utils/Makefile_gamsapi.inc
 noinst_PROGRAMS = optcouenne
 optcouenne_SOURCES = optcouenne.cpp ../utils/GamsOptionsSpecWriter.cpp
 optcouenne_LDADD = libGamsCouenne.la
-CLEANFILES += optcouenne.gms optcouenne.txt
 
-install-exec-local : install-libLTLIBRARIES
-	$(top_srcdir)/gamsinst.py "@GAMS_PATH@" libGamsCouenne.la MYCOUENNE cou "QCP RMIQCP NLP DNLP RMINLP CNS MIQCP MINLP" 0
-
-uninstall-local :
-	$(top_srcdir)/gamsuninst.py "@GAMS_PATH@" MYCOUENNE
+pkgdata_DATA = optcouenne.def
+doc_DATA = optcouenne.md
+optcouenne.def optcouenne.md : optcouenne$(EXEEXT)
+	./optcouenne$(EXEEXT)

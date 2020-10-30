@@ -8,8 +8,6 @@
 #                       Names and other basic things                        #
 #############################################################################
 
-AC_PREREQ(2.59)
-
 AC_INIT([GAMSlinks],[master],[https://github.com/coin-or/GAMSlinks])
 
 AC_COPYRIGHT([Copyright (C) 2006-2011 GAMS Development and others 
@@ -44,11 +42,15 @@ AC_COIN_DOXYGEN
 #############################################################################
 
 # check which solvers are available
-AC_COIN_CHK_PKG(Osi,     [GamsOsi],     [osi])
 AC_COIN_CHK_PKG(OsiCpx,  [GamsOsi],     [osi-cplex])
 AC_COIN_CHK_PKG(OsiGrb,  [GamsOsi],     [osi-gurobi])
 AC_COIN_CHK_PKG(OsiMsk,  [GamsOsi],     [osi-mosek])
 AC_COIN_CHK_PKG(OsiXpr,  [GamsOsi],     [osi-xpress])
+if test $coin_has_osicpx$coin_has_osigrb$coin_has_osimsk$coin_has_osixpr != "nononono" ; then
+  AC_COIN_CHK_PKG(Osi,   [GamsOsi],     [osi])
+else
+  AM_CONDITIONAL(COIN_HAS_OSI,false)
+fi
 AC_COIN_CHK_PKG(Cbc,     [GamsCbc],     [cbc])
 AC_COIN_CHK_PKG(Ipopt,   [GamsIpopt],   [ipopt])
 AC_COIN_CHK_PKG(Bonmin,  [GamsBonmin],  [bonmin])
@@ -109,6 +111,20 @@ AC_CHECK_LIB(dl,[dlopen],[
 
 AC_LANG_POP(C)
 
+# name of gensolver script and exe
+case $build in
+  *-mingw* | *-cygwin* | *-msys* )
+    GMSGENSCRIPT=gmsgennt.cmd
+    GMSGENEXE=gmsgennx.exe
+    ;;
+  *)
+    GMSGENSCRIPT=gmsgenus.run
+    GMSGENEXE=gmsgenux.out
+    ;;
+esac
+AC_SUBST(GMSGENSCRIPT)
+AC_SUBST(GMSGENEXE)
+
 ###############
 # GAMS system #
 ###############
@@ -145,6 +161,7 @@ AC_CONFIG_FILES([Makefile
                  src/scip/Makefile
                  src/soplex/Makefile
                  test/Makefile
+                 src/gamsconfig.yaml
                  doc/Doxyfile
                 ])
 AC_CONFIG_FILES([test/run_quality], [chmod +x test/run_quality])

@@ -4,8 +4,6 @@
 #
 # Author: Stefan Vigerske
 
-AUTOMAKE_OPTIONS = foreign
-
 SUBDIRS = src
 
 if ALWAYS_FALSE
@@ -16,8 +14,6 @@ doc_DATA = README.md LICENSE AUTHORS
 
 test: all
 	cd test; $(MAKE) test
-
-unitTest: test
 
 doc:
 	cd doc && doxygen

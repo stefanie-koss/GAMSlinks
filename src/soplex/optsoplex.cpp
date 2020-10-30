@@ -2,7 +2,7 @@
   * All Rights Reserved.
   * This code is published under the Eclipse Public License.
   *
-  * @file optbonmin.cpp
+  * @file optsoplex.cpp
   * @author Stefan Vigerske
  */
 
@@ -28,13 +28,7 @@ int main(int argc, char** argv)
 {
    SoPlex soplex;
 
-   GamsOptions::OPTVAL defaultval, minval, maxval;
-   GamsOptions::ENUMVAL enumval;
-   std::string tmpstr;
-   std::string descr;
-   std::string defaultdescr;
-
-   GamsOptions gmsopt("soplex");
+   GamsOptions gmsopt("SoPlex");
    gmsopt.setSeparator("=");
    // gmsopt.setStringQuote("\"");
    gmsopt.setGroup("soplex");
@@ -49,15 +43,10 @@ int main(int argc, char** argv)
       if( i == SoPlex::RATREC )
          continue;
 
-      defaultval.boolval = SoPlex::Settings::boolParam.defaultValue[i];
-      minval.boolval = 0;
-      maxval.boolval = 1;
-      defaultdescr = std::string();
-
       gmsopt.collect(
          std::string("bool:") + SoPlex::Settings::boolParam.name[i],
          SoPlex::Settings::boolParam.description[i], std::string(),
-         GamsOptions::OPTTYPE_BOOL, defaultval, minval, maxval, enumval, defaultdescr);
+         SoPlex::Settings::boolParam.defaultValue[i]);
    }
 
    for( int i = 0; i < SoPlex::INTPARAM_COUNT; ++i )
@@ -77,21 +66,25 @@ int main(int argc, char** argv)
       if( i == SoPlex::SOLUTION_POLISHING )
          continue;
 
-      // TODO recognize intenums
-      defaultval.intval = SoPlex::Settings::intParam.defaultValue[i];
-      minval.intval = SoPlex::Settings::intParam.lower[i];
-      maxval.intval = SoPlex::Settings::intParam.upper[i];
-      defaultdescr = std::string();
+      // TODO?? recognize intenums
+      int defaultval = SoPlex::Settings::intParam.defaultValue[i];
+      int minval = SoPlex::Settings::intParam.lower[i];
+      int maxval = SoPlex::Settings::intParam.upper[i];
+      std::string defaultdescr;
 
       if( i == SoPlex::ITERLIMIT )
+#ifdef GAMS_BUILD
          defaultdescr = "\\ref GAMSAOiterlim \"GAMS iterlim\"";
+#else
+         defaultdescr = "GAMS iterlim";
+#endif
       if( i == SoPlex::TIMER )
-         defaultval.intval = SoPlex::TIMER_WALLCLOCK;
+         defaultval = SoPlex::TIMER_WALLCLOCK;
 
       gmsopt.collect(
          std::string("int:") + SoPlex::Settings::intParam.name[i],
          SoPlex::Settings::intParam.description[i], std::string(),
-         GamsOptions::OPTTYPE_INTEGER, defaultval, minval, maxval, enumval, defaultdescr);
+         defaultval, minval, maxval, defaultdescr);
    }
 
    for( int i = 0; i < SoPlex::REALPARAM_COUNT; ++i )
@@ -101,23 +94,37 @@ int main(int argc, char** argv)
       if( i == SoPlex::OBJ_OFFSET )
          continue;
 
-      defaultval.realval = translateSoplexInfinity(SoPlex::Settings::realParam.defaultValue[i]);
-      minval.realval = translateSoplexInfinity(SoPlex::Settings::realParam.lower[i]);
-      maxval.realval = translateSoplexInfinity(SoPlex::Settings::realParam.upper[i]);
-      defaultdescr = std::string();
+      double defaultval = translateSoplexInfinity(SoPlex::Settings::realParam.defaultValue[i]);
+      double minval = translateSoplexInfinity(SoPlex::Settings::realParam.lower[i]);
+      double maxval = translateSoplexInfinity(SoPlex::Settings::realParam.upper[i]);
+      std::string defaultdescr;
 
+#ifdef GAMS_BUILD
       if( i == SoPlex::TIMELIMIT )
          defaultdescr = "\\ref GAMSAOreslim \"GAMS reslim\"";
       else if( i == SoPlex::OBJLIMIT_UPPER )
          defaultdescr = "\\ref GAMSAOcutoff \"GAMS cutoff\", if minimizing, else +&infin;";
       else if( i == SoPlex::OBJLIMIT_LOWER )
          defaultdescr = "\\ref GAMSAOcutoff \"GAMS cutoff\", if maximizing, else -&infin;";
+#else
+      if( i == SoPlex::TIMELIMIT )
+         defaultdescr = "GAMS reslim";
+      else if( i == SoPlex::OBJLIMIT_UPPER )
+         defaultdescr = "GAMS cutoff, if minimizing, else +&infin;";
+      else if( i == SoPlex::OBJLIMIT_LOWER )
+         defaultdescr = "GAMS cutoff, if maximizing, else -&infin;";
+#endif
 
       gmsopt.collect(
          std::string("real:") + SoPlex::Settings::realParam.name[i],
          SoPlex::Settings::realParam.description[i], std::string(),
-         GamsOptions::OPTTYPE_REAL, defaultval, minval, maxval, enumval, defaultdescr);
+         defaultval, minval, maxval, true, true, defaultdescr);
    }
+   gmsopt.finalize();
 
-   gmsopt.write(true);
+#ifdef GAMS_BUILD
+   gmsopt.writeDoxygen(true);
+#else
+   gmsopt.writeMarkdown();
+#endif
 }

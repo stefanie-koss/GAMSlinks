@@ -1272,7 +1272,6 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
    size_t namemem;
    SCIP_RETCODE rc = SCIP_OKAY;
    int maxstage;
-   int origprior;
    SCIP_Bool havedecomp;
    
    assert(scip != NULL);
@@ -1298,11 +1297,6 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
    /* we want GMO to use SCIP's value for infinity */
    gmoPinfSet(gmo,  SCIPinfinity(scip));
    gmoMinfSet(gmo, -SCIPinfinity(scip));
-
-   /* enable prioropt, if not enabled, so GMO may elect to return .prior values always */
-   origprior = gmoPriorOpt(gmo);
-   if( origprior == 0 )
-      gmoPriorOptSet(gmo, 1);
 
    /* create SCIP problem */
    SCIP_CALL( SCIPallocMemory(scip, &probdata) );
@@ -1388,7 +1382,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
    /* compute range of variable priorities */ 
    minprior = SCIPinfinity(scip);
    maxprior = 0.0;
-   if( origprior && gmoNDisc(gmo) > 0 )
+   if( gmoPriorOpt(gmo) && gmoNDisc(gmo) > 0 )
    {
       for (i = 0; i < gmoN(gmo); ++i)
       {
@@ -1428,7 +1422,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       {
          case gmovar_SC:
             lb = 0.0;
-            /*lint -fallthrough*/
+            /* no break */
          case gmovar_X:
          case gmovar_S1:
          case gmovar_S2:
@@ -1439,7 +1433,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
             break;
          case gmovar_SI:
             lb = 0.0;
-            /*lint -fallthrough*/
+            /* no break */
          case gmovar_I:
             vartype = SCIP_VARTYPE_INTEGER;
             break;
@@ -1460,7 +1454,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPdebugMessage("added variable ");
       SCIPdebug( SCIPprintVar(scip, vars[i], NULL) );
       
-      if( origprior && minprior < maxprior && gmoGetVarTypeOne(gmo, i) != (int) gmovar_X )
+      if( gmoPriorOpt(gmo) && minprior < maxprior && gmoGetVarTypeOne(gmo, i) != (int) gmovar_X )
       {
          /* in GAMS: higher priorities are given by smaller .prior values
             in SCIP: variables with higher branch priority are always preferred to variables with lower priority in selection of branching variable
@@ -1470,16 +1464,9 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
          SCIP_CALL( SCIPchgVarBranchPriority(scip, vars[i], branchpriority) );
       }
 
-      if( gmoGetVarTypeOne(gmo, i) == gmovar_X )
-      {
-         stage = gmoGetVarStageOne(gmo, i);
-         if( stage != 1.0 )
-            havedecomp = TRUE;
-      }
-      else if( origprior == 0 )  /* for non-X variable, use .prior attribute, if prioropt was not set originally */
-         stage = gmoGetVarPriorOne(gmo, i);
-      else
-         stage = 0.0;
+      stage = gmoGetVarStageOne(gmo, i);
+      if( stage != 1.0 )
+         havedecomp = TRUE;
       if( EPSISINT(stage, 0.0) )
          maxstage = MAX(maxstage, (int)stage);
    }
@@ -2110,12 +2097,7 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       {
          double stage;
 
-         if( gmoGetVarTypeOne(gmo, i) == gmovar_X )
-            stage = gmoGetVarStageOne(gmo, i);
-         else if( origprior == 0 )  /* for non-X variable, use .prior attribute, if prioropt was not set originally */
-            stage = gmoGetVarPriorOne(gmo, i);
-         else
-            stage = 0.0;
+         stage = gmoGetVarStageOne(gmo, i);
          if( !EPSISINT(stage, 0.0) || stage <= 0.0 )
             continue;
 
@@ -2143,10 +2125,6 @@ SCIP_RETCODE SCIPcreateProblemReaderGmo(
       SCIPfreeBufferArray(scip, &labels);
       SCIPfreeBufferArray(scip, &labeledvars);
    }
-
-   /* reset to original prioropt */
-   if( origprior == 0 )
-      gmoPriorOptSet(gmo, 0);
 
 TERMINATE:
    SCIPfreeBufferArrayNull(scip, &coefs);
@@ -3220,8 +3198,11 @@ SCIP_RETCODE SCIPreadParamsReaderGmo(
    {
       SCIP_CALL( SCIPsetLongintParam(scip, "limits/nodes", (long long)gevGetIntOpt(gev, gevNodeLim)) );
    }
-   SCIP_CALL( SCIPsetRealParam(scip, "limits/time",   gevGetDblOpt(gev, gevResLim)) );
-   SCIP_CALL( SCIPsetRealParam(scip, "limits/gap",    gevGetDblOpt(gev, gevOptCR)) );
+   if( !SCIPisInfinity(scip, gevGetDblOpt(gev, gevResLim)) )
+   {
+      SCIP_CALL( SCIPsetRealParam(scip, "limits/time", gevGetDblOpt(gev, gevResLim)) );
+   }
+   SCIP_CALL( SCIPsetRealParam(scip, "limits/gap", gevGetDblOpt(gev, gevOptCR)) );
    if( !SCIPisInfinity(scip, gevGetDblOpt(gev, gevOptCA)) )
    {
       SCIP_CALL( SCIPsetRealParam(scip, "limits/absgap", gevGetDblOpt(gev, gevOptCA)) );
@@ -3255,10 +3236,6 @@ SCIP_RETCODE SCIPreadParamsReaderGmo(
       SCIP_CALL( SCIPsetIntParam(scip, "display/maxdepth/active", 0) );
       SCIP_CALL( SCIPsetIntParam(scip, "display/time/active", 2) );
    }
-#endif
-
-#ifdef _WIN32
-   SCIP_CALL( SCIPsetIntParam(scip, "misc/usesymmetry", 0) );
 #endif
 
    /* enable column on number of branching on nonlinear variables, if any */

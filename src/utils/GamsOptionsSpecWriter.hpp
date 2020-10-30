@@ -14,83 +14,492 @@
 #include <set>
 #include <map>
 #include <list>
-#include <algorithm>
-
 #include <cstring>
-#include <cassert>
 #include <climits>
 #include <cfloat>
 
-class GamsOptions
+#ifdef _MSC_VER
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#endif
+
+class GamsOption
 {
 public:
-   typedef enum
+   enum Type
    {
-      OPTTYPE_BOOL,
-      OPTTYPE_INTEGER,
-      OPTTYPE_REAL,
-      OPTTYPE_CHAR,
-      OPTTYPE_STRING
-   } OPTTYPE;
-
-   union OPTVAL
-   {
-      bool                  boolval;
-      int                   intval;
-      double                realval;
-      char                  charval;
-      const char*           stringval;
+      BOOL,
+      INTEGER,
+      REAL,
+      CHAR,
+      STRING
    };
 
-   typedef std::vector<std::pair<OPTVAL, std::string> > ENUMVAL;
+   union Value
+   {
+      bool    boolval;
+      int     intval;
+      double  realval;
+      char    charval;
+      char*   stringval;
 
-private:
-   class Option
+      Value()
+      {
+         memset(this, 0, sizeof(Value));
+      }
+
+      Value(
+         bool val
+         )
+      : boolval(val)
+      { }
+
+      Value(
+         int val
+         )
+      : intval(val)
+      { }
+
+      Value(
+         double val
+         )
+      : realval(val)
+      { }
+
+      Value(
+         char val
+         )
+      : charval(val)
+      { }
+
+      Value(
+         const char* val
+         )
+      : stringval(val != NULL ? strdup(val) : NULL)
+      { }
+
+      Value(
+         const std::string& val
+         )
+      : stringval(strdup(val.c_str()))
+      { }
+
+      Value& operator=(
+         bool val
+         )
+      {
+         boolval = val;
+         return *this;
+      }
+
+      Value& operator=(
+         int val
+         )
+      {
+         intval = val;
+         return *this;
+      }
+
+      Value& operator=(
+         double val
+         )
+      {
+         realval = val;
+         return *this;
+      }
+
+      Value& operator=(
+         char val
+         )
+      {
+         charval = val;
+         return *this;
+      }
+
+      Value& operator=(
+         const char* val
+         )
+      {
+         stringval = val != NULL ? strdup(val) : NULL;
+         return *this;
+      }
+
+      Value& operator=(
+         const std::string& val
+         )
+      {
+         stringval = strdup(val.c_str());
+         return *this;
+      }
+
+      bool operator==(
+         bool val
+         ) const
+      {
+         return boolval == val;
+      }
+
+      bool operator==(
+         int val
+         ) const
+      {
+         return intval == val;
+      }
+
+      bool operator==(
+         double val
+         ) const
+      {
+         return realval == val;
+      }
+
+      bool operator==(
+         char val
+         ) const
+      {
+         return charval == val;
+      }
+
+      bool operator==(
+         const char* val
+         ) const
+      {
+         if( stringval == val )
+            return true;
+         if( stringval == NULL || val == NULL )
+            return false;
+         return strcmp(stringval, val) == 0;
+      }
+
+      bool operator==(
+         const std::string& val
+         ) const
+      {
+         return operator==(val.c_str());
+      }
+
+      template <typename T>
+      bool operator!=(
+         T val
+         ) const
+      {
+         return !operator==(val);
+      }
+
+      std::string toStringGams(
+         GamsOption::Type type,
+         bool             quotestr = false
+         ) const;
+
+      std::string toStringMarkdown(
+         GamsOption::Type type,
+         bool             doxygen = false
+         ) const;
+   };
+
+   class ValueCompare
+   {
+   private:
+      GamsOption::Type type;
+   public:
+      ValueCompare(
+         GamsOption::Type type_
+         )
+      : type(type_)
+      { }
+
+      bool operator()(
+         const GamsOption::Value& a,
+         const GamsOption::Value& b
+         ) const
+      {
+         switch( type )
+         {
+            case GamsOption::Type::BOOL :
+               return a.boolval < b.boolval;
+            case GamsOption::Type::INTEGER :
+               return a.intval < b.intval;
+            case GamsOption::Type::REAL :
+               return a.realval < b.realval;
+            case GamsOption::Type::CHAR:
+               return a.charval < b.charval;
+            case GamsOption::Type::STRING:
+               return strcasecmp(a.stringval, b.stringval) < 0;
+         }
+         return 0;
+      }
+   };
+
+   class EnumVals : public std::vector<std::pair<GamsOption::Value, std::string> >
    {
    public:
-      std::string        group;
-      std::string        name;
-      std::string        shortdescr;
-      std::string        longdescr;
-      std::string        defaultdescr;
-      OPTTYPE            type;
-      OPTVAL             defaultval;
-      OPTVAL             minval;
-      OPTVAL             maxval;
-      ENUMVAL            enumval;
-      int                refval;
-      std::set<std::string> synonyms;
-
-      Option(
-         const std::string& group_,
-         const std::string& name_,
-         const std::string& shortdescr_,
-         const std::string& longdescr_,
-         const std::string& defaultdescr_,
-         OPTTYPE            type_,
-         OPTVAL             defaultval_,
-         OPTVAL             minval_,
-         OPTVAL             maxval_,
-         const ENUMVAL&     enumval_,
-         int                refval_
+      template <typename T>
+      void append(
+         const T&           key,
+         const std::string& descr = ""
          )
-      : group(group_),
-        name(name_),
-        shortdescr(shortdescr_),
-        longdescr(longdescr_),
-        defaultdescr(defaultdescr_),
-        type(type_),
-        defaultval(defaultval_),
-        minval(minval_),
-        maxval(maxval_),
-        enumval(enumval_),
-        refval(refval_)
-      { }
+      {
+         emplace_back(key, descr);
+      }
+
+      template <typename T>
+      bool drop(
+         const T& key
+         )
+      {
+         for( GamsOption::EnumVals::iterator it(begin()); it != end(); ++it )
+            if( it->first == key )
+            {
+               this->erase(it);
+               return true;
+            }
+         return false;
+      }
+
+      /// returns whether there exists an enum value with non-empty description
+      bool hasDescription() const
+      {
+         for( auto& e : *this )
+            if( !e.second.empty() )
+               return true;
+         return false;
+      }
+
+      Value getMinKey(
+         GamsOption::Type type
+         ) const;
+
+      Value getMaxKey(
+         GamsOption::Type type
+         ) const;
    };
 
-   std::list<Option>     options;
-   std::map<std::string, std::string> groups;
-   std::set<std::string> values;
+   class EnumValCompare
+   {
+   private:
+      ValueCompare valcmp;
+   public:
+      EnumValCompare(
+         GamsOption::Type type_
+         )
+      : valcmp(type_)
+      { }
+
+      bool operator()(
+         const EnumVals::value_type& a,
+         const EnumVals::value_type& b
+         ) const
+      {
+         return valcmp(a.first, b.first);
+      }
+   };
+
+   std::string        group;
+   std::string        name;
+   std::string        shortdescr;
+   std::string        longdescr;
+   std::string        defaultdescr;
+   Type               type;
+   Value              defaultval;
+   Value              minval;
+   bool               minval_attainable;
+   Value              maxval;
+   bool               maxval_attainable;
+   EnumVals           enumval;
+   int                refval;
+   std::set<std::string> synonyms;
+
+   /// constructor for general option
+   GamsOption(
+      const std::string& name_,
+      const std::string& shortdescr_,
+      const std::string& longdescr_,
+      Type               type_,
+      Value              defaultval_,
+      Value              minval_,
+      Value              maxval_,
+      bool               minval_attainable_ = true,
+      bool               maxval_attainable_ = true,
+      const EnumVals&    enumval_ = EnumVals(),
+      const std::string& defaultdescr_ = std::string(),
+      int                refval_ = -2
+   )
+   : name(name_),
+     shortdescr(shortdescr_),
+     longdescr(longdescr_),
+     defaultdescr(defaultdescr_),
+     type(type_),
+     defaultval(defaultval_),
+     minval(minval_),
+     minval_attainable(minval_attainable_),
+     maxval(maxval_),
+     maxval_attainable(maxval_attainable_),
+     enumval(enumval_),
+     refval(refval_)
+   { }
+
+   /// constructor for real-type option
+   GamsOption(
+      const std::string& name,
+      const std::string& shortdescr,
+      const std::string& longdescr,
+      double             defaultval,
+      double             minval,
+      double             maxval,
+      bool               minval_attainable_ = true,
+      bool               maxval_attainable_ = true,
+      const std::string& defaultdescr = std::string(),
+      int                refval = -2
+   )
+   : GamsOption(name, shortdescr, longdescr,
+      GamsOption::Type::REAL,
+      Value(defaultval), Value(minval), Value(maxval),
+      minval_attainable_, maxval_attainable_,
+      GamsOption::EnumVals(),
+      defaultdescr, refval)
+   { }
+
+   /// constructor for integer-type option
+   GamsOption(
+      const std::string& name,
+      const std::string& shortdescr,
+      const std::string& longdescr,
+      int                defaultval,
+      int                minval,
+      int                maxval,
+      const std::string& defaultdescr = std::string(),
+      int                refval = -2
+   )
+   : GamsOption(name, shortdescr, longdescr,
+      GamsOption::Type::INTEGER,
+      Value(defaultval), Value(minval), Value(maxval),
+      true, true,
+      GamsOption::EnumVals(),
+      defaultdescr, refval)
+   { }
+
+   /// constructor for enumerated integer-type option
+   GamsOption(
+      const std::string& name,
+      const std::string& shortdescr,
+      const std::string& longdescr,
+      int                defaultval,
+      const GamsOption::EnumVals& enumval,
+      const std::string& defaultdescr = std::string(),
+      int                refval = -2
+   )
+   : GamsOption(name, shortdescr, longdescr,
+      GamsOption::Type::INTEGER,
+      Value(defaultval), Value(), Value(),
+      true, true,
+      enumval, defaultdescr, refval)
+   { }
+
+   /// constructor for bool-type option
+   GamsOption(
+      const std::string& name,
+      const std::string& shortdescr,
+      const std::string& longdescr,
+      bool               defaultval,
+      const std::string& defaultdescr = std::string(),
+      int                refval = -2
+   )
+   : GamsOption(name, shortdescr, longdescr,
+      GamsOption::Type::BOOL,
+      Value(defaultval), Value(), Value(),
+      true, true,
+      GamsOption::EnumVals(),
+      defaultdescr, refval)
+   { }
+
+   /// constructor for string-type option
+   GamsOption(
+      const std::string& name,
+      const std::string& shortdescr,
+      const std::string& longdescr,
+      const std::string& defaultval,
+      int                refval = -2
+   )
+   : GamsOption(name, shortdescr, longdescr,
+      GamsOption::Type::STRING,
+      Value(defaultval), Value(), Value(),
+      true, true,
+      GamsOption::EnumVals(),
+      std::string(), refval)
+   { }
+
+   /// constructor for enumerated string-type option
+   GamsOption(
+      const std::string& name,
+      const std::string& shortdescr,
+      const std::string& longdescr,
+      const std::string& defaultval,
+      const GamsOption::EnumVals& enumval,
+      const std::string& defaultdescr = std::string(),
+      int                refval = -2
+   )
+   : GamsOption(name, shortdescr, longdescr,
+         GamsOption::Type::STRING,
+         Value(defaultval), Value(), Value(),
+         true, true,
+         enumval, defaultdescr, refval)
+   { }
+
+   ~GamsOption()
+   {
+      if( type == Type::STRING )
+      {
+         // free C-strings
+         free(defaultval.stringval);
+         for( auto& e : enumval )
+         {
+            free(e.first.stringval);
+         }
+      }
+   }
+
+   /// get string describing range of option in markdown
+   std::string getRangeMarkdown(
+      bool doxygen = false
+      ) const;
+
+   // comparison for sorting options by name
+   bool operator<(
+      const GamsOption& other
+      ) const
+   {
+      return strcasecmp(name.c_str(), other.name.c_str()) < 0;
+   }
+};
+
+class GamsOptionGroup
+{
+public:
+   std::string name;
+   std::string shortdescr;
+   std::string longdescr;
+
+   // index set in GamsOptions::finalize()
+   int index;
+
+   GamsOptionGroup(
+      const std::string& name_,
+      const std::string& shortdescr_ = "",
+      const std::string& longdescr_ = ""
+   )
+   : name(name_),
+     shortdescr(shortdescr_.empty() ? name_ : shortdescr_),
+     longdescr(longdescr_),
+     index(-1)
+   { }
+};
+
+class GamsOptions
+{
+private:
+   std::list<GamsOption> options;
+   std::map<std::string, GamsOptionGroup> groups;
 
    std::string           solver;
    std::string           curgroup;
@@ -98,102 +507,24 @@ private:
    std::string           stringquote;
    std::string           eolchars;
 
-   static
-   std::string tolower(std::string s)
-   {
-      std::transform(s.begin(), s.end(), s.begin(), ::tolower);
-      return s;
-   }
-
-   static
-   void replaceAll(std::string& str, const std::string& from, const std::string& to) {
-       if(from.empty())
-           return;
-       size_t start_pos = 0;
-       while((start_pos = str.find(from, start_pos)) != std::string::npos) {
-           str.replace(start_pos, from.length(), to);
-           start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
-       }
-   }
-
 public:
-   static
-   std::string makeValidMarkdownString(const std::string& s)
-   {
-      std::string r(s);
-      replaceAll(r, "<=", "&le;");
-      replaceAll(r, ">=", "&ge;");
-      replaceAll(r, "<", "&lt;");
-      replaceAll(r, ">", "&gt;");
-      replaceAll(r, "|", "\\|");
-      replaceAll(r, "$", "\\f$");
-      return r;
-   }
-
-   static
-   std::string makeValidLatexNumber(
-      double                value
-   )
-   {
-      if( value ==  DBL_MAX )
-         return "\\infty";
-      if( value == -DBL_MAX )
-         return "-\\infty";
-
-      char buffer[256];
-      sprintf(buffer, "%g", value);
-      std::string str = buffer;
-
-      size_t epos = str.find("e");
-      if( epos != std::string::npos )
-      {
-         if( str[epos+1] == '+' )
-            str[epos+1] = ' ';
-         if( str[epos+2] == '0' )
-            str[epos+2] = ' ';
-         if( epos == 1 && str[0] == '1' ) // number is 1e...
-            str.replace(0, 2, "10^{");
-         else if( epos == 2 && str[0] == '-' && str[1] == '1' )  // number is -1e...
-            str.replace(1, 2, "10^{");
-         else // number is ...e...
-            str.replace(epos, 1, " \\cdot 10^{");
-         str.append("}");
-      }
-
-      return str;
-   }
-
-   static
-   std::string makeValidLatexNumber(
-      int                   value
-   )
-   {
-      if( value ==  INT_MAX )
-         return "\\infty";
-      if( value == -INT_MAX )
-         return "-\\infty";
-
-      char buffer[256];
-      sprintf(buffer, "%d", value);
-
-      return buffer;
-   }
-
    GamsOptions(
       const std::string& solver_
       )
-   : values(),
-     solver(solver_),
+   : solver(solver_),
      separator(" ")
    { }
 
+   /// adds group and sets current group
+   /// descriptions are ignored if group already exists
    void setGroup(
       const std::string& group,
-      const std::string& description = ""
+      const std::string& description = "",
+      const std::string& longdescription = ""
       )
    {
       curgroup = group;
-      groups[group] = description;
+      groups.emplace(group, GamsOptionGroup(group, description, longdescription));
    }
 
    void setSeparator(
@@ -217,139 +548,34 @@ public:
       eolchars = eolchs;
    }
 
-   void collect(
-      const std::string& name,
-      std::string        shortdescr,
-      std::string        longdescr,
-      OPTTYPE            type,
-      OPTVAL             defaultval,
-      OPTVAL             minval,
-      OPTVAL             maxval,
-      const ENUMVAL&     enumval,
-      const std::string& defaultdescr = std::string(),
-      int                refval = -2
-   );
-
-   /** add real-type option */
-   void collect(
-      const std::string& name,
-      const std::string& shortdescr,
-      const std::string& longdescr,
-      double             defaultval,
-      double             minval,
-      double             maxval,
-      const std::string& defaultdescr = std::string(),
-      int                refval = -2
-   )
+   /// append option to options list, assign it to current group
+   template<class... Args>
+   GamsOption& collect(
+      Args&&... args)
    {
-      collect(name, shortdescr, longdescr,
-         OPTTYPE_REAL, OPTVAL({.realval = defaultval}), OPTVAL({.realval = minval}), OPTVAL({.realval = maxval}), ENUMVAL(),
-         defaultdescr, refval);
-   }
-
-   /** add integer-type option */
-   void collect(
-      const std::string& name,
-      const std::string& shortdescr,
-      const std::string& longdescr,
-      int                defaultval,
-      int                minval,
-      int                maxval,
-      const std::string& defaultdescr = std::string(),
-      int                refval = -2
-   )
-   {
-      collect(name, shortdescr, longdescr,
-         OPTTYPE_INTEGER, OPTVAL({.intval = defaultval}), OPTVAL({.intval = minval}), OPTVAL({.intval = maxval}), ENUMVAL(),
-         defaultdescr, refval);
-   }
-
-   /** add enumerated integer-type option */
-   void collect(
-      const std::string& name,
-      const std::string& shortdescr,
-      const std::string& longdescr,
-      int                defaultval,
-      const ENUMVAL&     enumval,
-      const std::string& defaultdescr = std::string(),
-      int                refval = -2
-   )
-   {
-      int minval =  INT_MAX;
-      int maxval = -INT_MAX;
-      for( ENUMVAL::const_iterator e(enumval.begin()); e != enumval.end(); ++e )
-      {
-         minval = std::min(e->first.intval, minval);
-         maxval = std::max(e->first.intval, maxval);
-      }
-      collect(name, shortdescr, longdescr,
-         OPTTYPE_INTEGER, OPTVAL({.intval = defaultval}), OPTVAL({.intval = minval}), OPTVAL({.intval = maxval}), enumval,
-         defaultdescr, refval);
-   }
-
-   /** add bool-type option */
-   void collect(
-      const std::string& name,
-      const std::string& shortdescr,
-      const std::string& longdescr,
-      bool               defaultval,
-      const std::string& defaultdescr = std::string(),
-      int                refval = -2
-   )
-   {
-      collect(name, shortdescr, longdescr,
-         OPTTYPE_BOOL, OPTVAL({.boolval = defaultval}), OPTVAL(), OPTVAL(), ENUMVAL(),
-         defaultdescr, refval);
-   }
-
-   /** add string-type option */
-   void collect(
-      const std::string& name,
-      const std::string& shortdescr,
-      const std::string& longdescr,
-      const std::string& defaultval,
-      int                refval = -2
-   )
-   {
-      const char* def = strdup(defaultval.c_str());
-      collect(name, shortdescr, longdescr,
-         OPTTYPE_STRING, OPTVAL({.stringval = def}), OPTVAL(), OPTVAL(), ENUMVAL(),
-         std::string(), refval);
-   }
-
-   /** add enumerated string-type option */
-   void collect(
-      const std::string& name,
-      const std::string& shortdescr,
-      const std::string& longdescr,
-      const std::string& defaultval,
-      const ENUMVAL&     enumval,
-      const std::string& defaultdescr = std::string(),
-      int                refval = -2
-   )
-   {
-      const char* def = strdup(defaultval.c_str());
-      collect(name, shortdescr, longdescr,
-         OPTTYPE_STRING, OPTVAL({.stringval = def}), OPTVAL(), OPTVAL(), enumval,
-         defaultdescr, refval);
-   }
-
-   /// get last added option
-   Option& back()
-   {
-      assert(!options.empty());
+      options.emplace_back(std::forward<Args>(args)...);
+      options.back().group = curgroup;
       return options.back();
    }
 
-   /// add element to "value" error - for hacks
-   void addvalue(
-      const std::string& v
-      )
-   {
-      values.insert(v);
-   }
+   /// sorts options and groups
+   void finalize();
 
-   void write(bool shortdoc = false);
+   /// write options in .gms + .txt for GAMS mkopt scripts
+   void writeGMS(
+      bool shortdoc = false
+      );
+
+   /// write options .def file
+   void writeDef();
+
+   /// write options in Markdown
+   void writeMarkdown();
+
+   /// write options in Doxygen-flavored Markdown as used for GAMS docu
+   void writeDoxygen(
+      bool shortdoc = false
+      );
 };
 
 #endif // GAMSOPTIONSSPECWRITER_HPP_

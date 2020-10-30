@@ -4,13 +4,11 @@
 #
 # Author: Stefan Vigerske
 
-AUTOMAKE_OPTIONS = foreign subdir-objects
-
 AM_CPPFLAGS = \
   -I$(srcdir)/../utils \
   $(GAMSSOPLEX_CFLAGS)
 
-LDFLAGS += $(LT_LDFLAGS)
+AM_LDFLAGS = $(LT_LDFLAGS)
 
 lib_LTLIBRARIES = libGamsSoplex.la
 libGamsSoplex_la_SOURCES = GamsSoPlex.cpp \
@@ -24,10 +22,7 @@ include ../utils/Makefile_gamsapi.inc
 noinst_PROGRAMS = optsoplex
 optsoplex_SOURCES = optsoplex.cpp ../utils/GamsOptionsSpecWriter.cpp
 optsoplex_LDADD = $(GAMSSOPLEX_LFLAGS)
-CLEANFILES += optsoplex.gms
 
-install-exec-local : install-libLTLIBRARIES
-	$(top_srcdir)/gamsinst.py "@GAMS_PATH@" libGamsSoplex.la MYSOPLEX osp "LP RMIP" 5
-
-uninstall-local :
-	$(top_srcdir)/gamsuninst.py "@GAMS_PATH@" MYSOPLEX
+doc_DATA = optsoplex.md
+optsoplex.md : optsoplex$(EXEEXT)
+	./optsoplex$(EXEEXT)

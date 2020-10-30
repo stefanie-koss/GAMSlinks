@@ -4,8 +4,6 @@
 #
 # Author: Stefan Vigerske
 
-AUTOMAKE_OPTIONS = foreign
-
 SUBDIRS =
 
 if COIN_HAS_BONMIN
@@ -35,3 +33,9 @@ endif
 if COIN_HAS_SOPLEX
   SUBDIRS += soplex
 endif
+
+install-exec-local : gamsconfig.yaml
+	$(srcdir)/install-gamsconfig.py gamsconfig.yaml $(pkgdatadir)
+
+uninstall-local :
+	rm -rf $(pkgdatadir)/gamsconfig.yaml
